@@ -1,11 +1,12 @@
-import React from 'react';
-
+import React from 'react'
+import { Audio } from './components/Audio'
+import './reset.css'
 const App: React.FC = () => {
   return (
     <div>
-      WebAudioAPI Sample
+      <Audio />
     </div>
-  );
+  )
 }
 
-export default App;
+export default App
