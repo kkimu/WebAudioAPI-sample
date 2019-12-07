@@ -13,12 +13,12 @@ const rand = (min: number, max: number) => Math.random() * (max - min) + min
 
 class Loader {
   url: string
-  onLoad: (buffer: AudioBuffer) => void
+  onLoad: (buffer: any) => void
   audioCtx: AudioContext
 
   constructor(
     url: string,
-    callback: (buffer: AudioBuffer) => void,
+    callback: (buffer: any) => void,
     audioCtx: AudioContext
   ) {
     this.url = url
@@ -26,32 +26,9 @@ class Loader {
     this.audioCtx = audioCtx
   }
 
-  loadBuffer() {
-    const request = new XMLHttpRequest()
-    request.open('GET', this.url, true)
-    request.responseType = 'arraybuffer'
-
-    request.onload = (event: ProgressEvent) => {
-      this.audioCtx.decodeAudioData(
-        request.response,
-        (buffer) => {
-          if (!buffer) {
-            console.log('error')
-            return
-          }
-          this.onLoad(buffer)
-        },
-        (error) => {
-          console.log('decodeAudioData error')
-        }
-      )
-    }
-
-    request.onerror = () => {
-      console.log('Loader: XHR error')
-    }
-
-    request.send()
+  loadBuffer(audioNode: HTMLMediaElement) {
+    const audioSourceNode = this.audioCtx.createMediaElementSource(audioNode)
+    this.onLoad(audioSourceNode)
   }
 }
 
@@ -65,12 +42,13 @@ class Visualizer {
   analyser: AnalyserNode
   freqs: Uint8Array
   times: Uint8Array
-  source: AudioBufferSourceNode
+  // source: AudioBufferSourceNode
+  mediaElementAudioSource: MediaElementAudioSourceNode
 
   constructor(
-    buffer: AudioBuffer,
+    node: MediaElementAudioSourceNode,
     audioCtx: AudioContext,
-    ctx: CanvasRenderingContext2D
+    ctx: CanvasRenderingContext2D,
   ) {
     this.audioCtx = audioCtx
     this.ctx = ctx
@@ -81,15 +59,8 @@ class Visualizer {
     this.analyser.maxDecibels = 0
     this.freqs = new Uint8Array(this.analyser.frequencyBinCount)
     this.times = new Uint8Array(this.analyser.frequencyBinCount)
-    this.source = audioCtx.createBufferSource()
-    this.source.connect(this.analyser)
-    this.source.buffer = buffer
-    this.source.loop = true
-  }
-
-  play() {
-    this.source.start(0)
-    this.draw()
+    this.mediaElementAudioSource = node
+    this.mediaElementAudioSource.connect(this.analyser)
   }
 
   draw() {
@@ -205,32 +176,34 @@ export const Audio: React.FC = () => {
   }, [])
 
   const initVisualizer = useCallback(
-    (buffer: AudioBuffer) => {
-      if (!audioCtx || !ctx) return
-      setVisualizer(new Visualizer(buffer, audioCtx, ctx))
+    (node: MediaElementAudioSourceNode) => {
+      if (!audioCtx || !ctx || !audioRef.current) return
+      setVisualizer(new Visualizer(node, audioCtx, ctx))
     },
     [audioCtx, ctx]
   )
 
   useEffect(() => {
-    if (!audioCtx) return
+    if (!audioCtx || !audioRef.current) return
     const loader = new Loader(
       'http://localhost:8080/sample.mp3',
       initVisualizer,
       audioCtx
     )
-    loader.loadBuffer()
+    loader.loadBuffer(audioRef.current)
   }, [audioCtx, initVisualizer])
 
   const handleClick = useCallback(() => {
-    visualizer && visualizer.play()
-  }, [visualizer])
+    audioRef.current && audioRef.current.play()
+    visualizer && visualizer.draw()
+
+  }, [visualizer, audioRef.current])
 
   return (
     <Wrapper>
       <Button onClick={handleClick}>クリックして再生</Button>
       <canvas ref={canvasRef} />
-      <audio ref={audioRef} src="http://localhost:8080/sample.mp3" />
+      <audio crossOrigin="anonymous" ref={audioRef} src="http://localhost:8080/sample.mp3" />
     </Wrapper>
   )
 }
